@@ -1,54 +1,42 @@
 --- The store of live toasts: the schema, the ownership keys and the two queue ceilings.
----
---- Every limit in this file is the platform's, taken from `notifications.md`'s definition
---- reference and cross-checked against the shipped `open77_notifications/client/main.lua`:
---- a title of 96 UTF-8 bytes, a body of 384, an icon of 16, an id of 96 matching
---- `^[%w_:%-%.]+$`, a duration of `0` or 750..120000, at most 32 toasts held and at most
---- eight per position. They are not ours to loosen: third-party code written against the
---- documented surface has to behave here exactly as it does there.
 
 OpxNotify = OpxNotify or {}
 
---- Mirrors `version` in open77.lua, which no Lua code can read. Nothing checks that the two
---- agree, so a release moves both lines or the copy a caller reads is a lie.
-OpxNotify.VERSION = "0.1.0"
+--- Mirrors `version` in open77.lua, which no Lua code can read. A release moves both lines.
+OpxNotify.VERSION = "0.2.0"
 
 local Config = OPX_NOTIFY_CONFIG
 
 local State = {}
 OpxNotify.state = State
 
---- `#` counts bytes in Lua, which is what the platform's own limits are stated in.
+-- Byte limits, as the platform states them.
 local MAX_TITLE = 96
 local MAX_MESSAGE = 384
 local MAX_ICON = 16
 local MAX_ID = 96
 
---- Resource names, which is what an owner is. The host answers `GetInvokingResource` with a
---- manifest name and those are short; 64 is the bound every OPX resource applies to one.
+--- The bound on a resource name, which is what an owner is.
 local MAX_OWNER = 64
 
---- `0` is persistent. A timed toast is 750..120000 ms -- below 750 the entrance animation
---- has not finished before the exit one starts, above two minutes it is a panel, not a toast.
+--- `0` is persistent; a timed toast is 750..120000 ms.
 local MIN_TIMED_MS = 750
 local MAX_TIMED_MS = 120000
 
---- `data` rides in every local event raised on removal: the host drops a payload past 1024
---- nodes in silence, so a caller's opaque table is counted rather than truncated.
+--- What an unnamed toast's id is built from. A caller may spell an id of this shape, so
+--- `State.autoId` steps past one that owner already holds.
+local AUTO_ID_PREFIX = "notification_"
+
+--- Bounds on a caller's opaque `data`, which rides in the removal event.
 local MAX_DATA_NODES = 64
 local MAX_DATA_DEPTH = 4
 
---- The most this resource holds at once, and the most one position holds. Adding a ninth
---- toast to a position evicts that position's oldest. Guard rails against a caller that
---- leaks, not numbers an operator would tune -- and they are the documented ones, so raising
---- them here would make this resource behave differently from the package it stands in for.
+--- The most held at once, and the most one position holds; a ninth evicts that position's
+--- oldest. Both are the documented numbers.
 State.MAX_NOTIFICATIONS = 32
 State.MAX_PER_POSITION = 8
 
---- Accent per kind. These are the OPEN//77 signal tokens and they are kept in step with
---- `web/open77-ui.css` (--op77-accent, --op77-ok, --op77-warn, --op77-signal) and with the
---- same four literals in the official package's client/main.lua. Change them here and in
---- web/notify.css together, or a toast's Lua colour and its CSS class disagree.
+--- Accent per kind. Duplicated in web/notify.css; change both together.
 State.KINDS = {
   info = "#22D8E2",
   success = "#4FE3A9",
@@ -56,9 +44,7 @@ State.KINDS = {
   error = "#FF5964",
 }
 
---- The platform's seven positions, and only those. There is no `middle_right` and no
---- `middle_center`: the set is asymmetric in the published schema, and inventing the missing
---- two would give a caller a position the official package refuses.
+--- The platform's seven positions, and only those.
 State.POSITIONS = {
   top_left = true,
   top_center = true,
@@ -84,12 +70,11 @@ State.enabled = {}
 --- Handles are client-local, monotonic and never reused within a session.
 State.nextHandle = 1
 
---- A finite number: a number, not NaN, and neither infinity. One predicate, spelled the same
---- way in every resource of this framework.
+--- A finite number: a number, not NaN, neither infinity.
 ---@param value any
 ---@return boolean
 local function finite(value)
-  -- `value == value` is the NaN check, not a typo: NaN is the one value unequal to itself
+  -- `value == value` is the NaN check: NaN is the one value unequal to itself
   return type(value) == "number" and value == value
     and value > -math.huge and value < math.huge
 end
@@ -102,9 +87,7 @@ function State.validName(value, maximum)
     and value:match("^[%w_:%-%.]+$") ~= nil
 end
 
---- Display copy: bounded, and refused rather than cleaned when it carries a control
---- character. The page inserts every string with `textContent`, so nothing here can become
---- markup; a control character would still ruin the line it lands in.
+--- Display copy: bounded, and refused rather than cleaned when it carries a control character.
 ---@param value any
 ---@param maximum integer
 ---@param allowEmpty boolean
@@ -114,8 +97,7 @@ local function validText(value, maximum, allowEmpty)
     and (allowEmpty or #value > 0) and value:find("[%c]") == nil
 end
 
---- `#RRGGBB`, upper-cased. Three-digit and eight-digit forms are refused: the page writes the
---- value straight into a custom property and a caller that meant `#abc` gets to hear so.
+--- Normalise a colour to `#RRGGBB`, upper-cased. Three- and eight-digit forms are refused.
 ---@param value any
 ---@param fallback string|nil when nil, an absent value answers nil rather than a colour
 ---@return string|nil
@@ -129,8 +111,7 @@ local function normalizeColor(value, fallback)
   return value:upper()
 end
 
---- A shallow copy. There is no `setmetatable` in this sandbox, so this is a plain loop and
---- never a proxy.
+--- A shallow copy.
 ---@param source table|nil
 ---@return table
 function State.copy(source)
@@ -156,13 +137,8 @@ local function fitsInPayload(value, depth, budget)
   return true
 end
 
---- The identity key for one owner's id.
----
---- `\1`, not `:`, because both halves may contain a colon: an id may (`^[%w_:%-%.]+$` allows
---- it) and a server owner is stored as `@server:<resource>`. With a colon separator the pair
---- ("a", "b:c") and the pair ("a:b", "c") produce the same key, and one resource's update
---- would land on another's toast. `\1` cannot occur in either half -- `%w_:%-%.` excludes it,
---- and so does every resource name.
+--- The identity key for one owner's id. The separator is `\1`, not `:`, because both halves
+--- may contain a colon.
 ---@param owner string
 ---@param id string
 ---@return string
@@ -170,24 +146,33 @@ function State.key(owner, id)
   return owner .. "\1" .. id
 end
 
+--- The id a definition that names none is given: `notification_<handle>`, or the next free
+--- number when this owner already holds that id.
+---@param owner string
+---@param handle integer|nil
+---@return string
+function State.autoId(owner, handle)
+  local number = handle or State.nextHandle
+  while true do
+    local id = AUTO_ID_PREFIX .. tostring(number)
+    local taken = State.identities[State.key(owner, id)]
+    if taken == nil or taken == handle then return id end
+    number = number + 1
+  end
+end
+
 --- Validate a definition and turn it into a stored entry. Whole or not at all: a refusal
---- leaves nothing behind, so a caller never has to undo a half-applied definition.
----
---- `handle` is the handle to reuse when re-normalising an entry that already exists, and nil
---- for a new one. `atMs` is the monotonic clock the deadline is computed against.
+--- leaves nothing behind.
 ---@param owner string
 ---@param definition any
----@param handle integer|nil
----@param atMs integer
+---@param handle integer|nil the handle to reuse when re-normalising, nil for a new entry
+---@param atMs integer the monotonic clock the deadline is computed against
 ---@return table|nil entry
 ---@return string|nil reason
 function State.normalize(owner, definition, handle, atMs)
   if type(definition) ~= "table" then return nil, "definition_must_be_a_table" end
 
-  -- `type` and `kind` are aliases in the documented schema. Both are read; neither is
-  -- invented. `type` first, because that is the name the documentation's examples use.
-  -- `State.canonical` has already collapsed the pair on every merge path, so this branch
-  -- only ever decides for a definition that arrived straight from a caller.
+  -- `type` and `kind` are aliases; `type` wins.
   local kind = definition.type
   if kind == nil then kind = definition.kind end
   if kind == nil then kind = "info" end
@@ -196,15 +181,14 @@ function State.normalize(owner, definition, handle, atMs)
   if State.KINDS[kind] == nil then return nil, "invalid_type" end
 
   local id = definition.id
-  if id == nil then id = "notification_" .. tostring(handle or State.nextHandle) end
+  if id == nil then id = State.autoId(owner, handle) end
   if not State.validName(id, MAX_ID) then return nil, "invalid_notification_id" end
 
   local title = definition.title
   if title == nil then title = "" end
   if not validText(title, MAX_TITLE, true) then return nil, "invalid_title" end
 
-  -- `message` and `text` are aliases in the documented schema, and the body is required:
-  -- a toast with a title and nothing under it is a label, not a notification.
+  -- `message` and `text` are aliases; the body is required.
   local message = definition.message
   if message == nil then message = definition.text end
   if not validText(message, MAX_MESSAGE, false) then return nil, "invalid_message" end
@@ -212,13 +196,11 @@ function State.normalize(owner, definition, handle, atMs)
   local icon = definition.icon
   if icon ~= nil and not validText(icon, MAX_ICON, true) then return nil, "invalid_icon" end
 
-  -- The one default that departs from the official package's, and the only one. See
-  -- OPX_NOTIFY_CONFIG.POSITION for why.
   local position = definition.position
   if position == nil then position = Config.POSITION end
   if State.POSITIONS[position] == nil then return nil, "invalid_position" end
 
-  -- `durationMs` and `duration` are aliases in the documented schema.
+  -- `durationMs` and `duration` are aliases.
   local durationMs = definition.durationMs
   if durationMs == nil then durationMs = definition.duration end
   if durationMs == nil then durationMs = Config.DURATION_MS end
@@ -228,11 +210,6 @@ function State.normalize(owner, definition, handle, atMs)
   if durationMs > MAX_TIMED_MS then return nil, "invalid_duration" end
   if durationMs > 0 and durationMs < MIN_TIMED_MS then return nil, "invalid_duration" end
 
-  -- The official package writes `definition.progress ~= false`, which is a boolean by
-  -- construction, and then checks that boolean is a boolean -- so its `invalid_progress`
-  -- can never fire and `progress = "yes"` reads as true. Ours refuses anything that is
-  -- neither nil nor a boolean. It is the one rule here that is stricter than the package
-  -- it mirrors, and it is stricter in the direction of telling a caller about its bug.
   local progress = definition.progress
   if progress == nil then progress = Config.PROGRESS end
   if type(progress) ~= "boolean" then return nil, "invalid_progress" end
@@ -241,8 +218,7 @@ function State.normalize(owner, definition, handle, atMs)
   local color = normalizeColor(definition.color, State.KINDS[kind])
   if color == nil then return nil, "invalid_color" end
 
-  -- A non-table `data` is ignored rather than refused, which is what the official package
-  -- does; a table is bounded, because it is echoed back in a local event.
+  -- A non-table `data` is ignored rather than refused; a table is bounded.
   local data = definition.data
   if type(data) ~= "table" then
     data = {}
@@ -262,30 +238,20 @@ function State.normalize(owner, definition, handle, atMs)
     durationMs = durationMs,
     -- a persistent toast has no lifetime to draw, whatever the caller asked for
     progress = progress and durationMs > 0,
-    -- What the caller ASKED for, kept beside what was drawn. A toast made persistent and
-    -- then given a duration again by a patch that says nothing about `progress` gets its bar
-    -- back; storing only the reduced value would have lost the request on the way through.
+    -- what the caller asked for, so a later patch can re-derive rather than inherit
     progressWanted = progress,
     color = color,
-    -- nil unless the caller pinned one. `color` above is the resolved accent, which is the
-    -- kind's default when nothing was pinned -- and carrying THAT back into a patch is what
-    -- makes the official package's own documented example wrong: `update(handle, { type =
-    -- "success" })` there re-normalises the stored cyan and the toast stays cyan. Keeping
-    -- the request separate lets a change of kind re-derive the accent, while a caller that
-    -- named a colour keeps the colour it named.
+    -- nil unless the caller pinned one, so a change of kind re-derives the accent
     colorWanted = normalizeColor(definition.color, nil),
     createdAtMs = atMs,
-    -- absolute, not remaining: the page counts down from this on its own clock
+    -- Lua's own deadline; it never crosses to the page, which is sent `durationMs` instead
     expiresAtMs = durationMs > 0 and (atMs + durationMs) or nil,
     data = data,
   }
 end
 
 --- One stored entry expressed as a definition again, which is what a patch is merged over.
----
---- Only the primary spelling of each aliased field appears, so a patch that names an alias
---- (`text`, `kind`, `duration`) overrides it -- see `State.canonical`, which is what puts the
---- patch into the same spelling first.
+--- Only the primary spelling of each aliased field appears.
 ---@param entry table
 ---@return table
 function State.definitionOf(entry)
@@ -303,13 +269,8 @@ function State.definitionOf(entry)
   }
 end
 
---- Collapse the documented aliases onto one spelling each.
----
---- Merging is why this exists. A stored entry becomes a definition spelling its body
---- `message`; a patch that spells it `text` would then leave BOTH keys in the merged table,
---- and `normalize` reads `message` first -- so the patch would be silently ignored. The same
---- trap is set by `kind` against `type` and by `duration` against `durationMs`. Collapsing
---- the patch before the merge is the only place this can be fixed once for all three.
+--- Collapse the documented aliases onto one spelling each, so a patch spelling an alias
+--- cannot sit beside the stored primary spelling and lose to it on merge.
 ---@param definition table
 ---@return table
 function State.canonical(definition)
@@ -323,8 +284,7 @@ function State.canonical(definition)
   return out
 end
 
---- What crosses to the page, and what `list` answers. `owner` and `data` stay in Lua: the
---- page has no use for either, and `data` is the caller's, not the renderer's.
+--- What crosses to the page, and what `list` answers. `owner` and `data` stay in Lua.
 ---@param entry table
 ---@return table
 function State.payload(entry)
@@ -349,8 +309,7 @@ function State.count()
   return total
 end
 
---- The oldest entry in one position, and how many that position holds. One pass, because
---- both answers are wanted at the same moment and `pairs` over 32 entries twice is twice.
+--- The oldest entry in one position, and how many that position holds.
 ---@param position string
 ---@return table|nil oldest
 ---@return integer held
@@ -361,8 +320,7 @@ function State.oldestAt(position)
       held = held + 1
       if oldest == nil or entry.createdAtMs < oldest.createdAtMs
         or (entry.createdAtMs == oldest.createdAtMs and entry.handle < oldest.handle) then
-        -- the handle breaks a tie: two toasts raised in one frame share a millisecond, and
-        -- `pairs` order would otherwise decide which of them is evicted
+        -- the handle breaks a tie: two toasts raised in one frame share a millisecond
         oldest = entry
       end
     end
@@ -401,8 +359,7 @@ function State.remove(handle)
   return entry
 end
 
---- Every handle one owner holds, as a list, so a caller can be swept without mutating the
---- table `pairs` is walking.
+--- Every handle one owner holds, as a list, so a sweep does not mutate the table it walks.
 ---@param owner string
 ---@return integer[]
 function State.handlesOf(owner)
@@ -416,8 +373,7 @@ function State.handlesOf(owner)
   return handles
 end
 
---- Whether this owner has turned its own notifications off. Absent means on: an owner that
---- has never called `setEnabled` is enabled.
+--- Whether this owner has its notifications on. One that never called `setEnabled` is on.
 ---@param owner string
 ---@return boolean
 function State.isEnabled(owner)
@@ -432,11 +388,8 @@ function State.setEnabled(owner, value)
   return State.enabled[owner]
 end
 
---- Owner names for server-sent toasts.
----
---- The prefix is the official package's, byte for byte, and it is what keeps a client
---- resource from forging one: `@` is outside `^[%w_:%-%.]+$`, so no value `GetInvokingResource`
---- can ever answer collides with a server owner, and no export argument names an owner at all.
+--- The owner name for a server-sent toast. `@` is outside the class a client owner is
+--- validated against, so a client resource can never address one.
 ---@param value any the resource name carried in the envelope
 ---@return string|nil
 function State.serverOwner(value)
