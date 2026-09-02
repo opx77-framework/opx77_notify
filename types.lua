@@ -1,0 +1,88 @@
+---@meta
+--- Type annotations for opx77_notify. Never loaded at runtime, and never listed in
+--- open77.lua: `---@meta` is a language-server file, and a manifest entry would run it.
+
+--- The four kinds. Each supplies a default accent; `color` overrides it.
+---@alias NotifyKind "info"|"success"|"warning"|"error"
+
+--- The platform's seven positions. The set is asymmetric in the published schema -- there is
+--- no `middle_right` and no `middle_center` -- and this resource does not invent the missing
+--- two, because the official package refuses them.
+---@alias NotifyPosition
+---| "top_left"
+---| "top_center"
+---| "top_right"
+---| "middle_left"
+---| "bottom_left"
+---| "bottom_center"
+---| "bottom_right"
+
+--- Why a toast went away, as it reaches `open77:notificationRemoved`.
+---@alias NotifyReason
+---| "expired"          its duration elapsed
+---| "dismissed"        its owner called `dismiss`
+---| "queue_limit"      a ninth toast joined its position and it was the oldest there
+---| "owner_cleared"    its owner called `clear`
+---| "owner_disabled"   its owner called `setEnabled(false)`
+---| "owner_reloaded"   its owner's code was replaced
+---| "owner_stopped"    its owner stopped
+---| "server_dismissed" the server resource that sent it called `Open77.notifications.dismiss`
+---| "server_cleared"   the server resource that sent it called `Open77.notifications.clear`
+
+--- The definition handed to `show`, and the patch handed to `update`. Only the body is
+--- required, and it may be spelled either way.
+---
+--- Three fields carry a documented alias. Where both spellings are present the primary one
+--- wins: `type` over `kind`, `message` over `text`, `durationMs` over `duration`.
+---@class NotifyDefinition
+---@field id string|nil            stable and owner-local, 1..96 chars of [%w_:%-%.].
+---                                Defaults to `notification_<handle>`
+---@field replace boolean|nil      replace an existing toast of yours with the same `id`.
+---                                Without it a repeated id is `duplicate_notification_id`
+---@field type NotifyKind|nil      defaults to "info"
+---@field kind NotifyKind|nil      accepted as an alias for `type`
+---@field title string|nil         the heading, up to 96 UTF-8 bytes
+---@field message string|nil       the body, required, up to 384 UTF-8 bytes
+---@field text string|nil          accepted as an alias for `message`
+---@field icon string|nil          a short textual badge, up to 16 UTF-8 bytes
+---@field position NotifyPosition|nil  defaults to OPX_NOTIFY_CONFIG.POSITION
+---@field durationMs integer|nil   0 is persistent; a timed value is 750..120000
+---@field duration integer|nil     accepted as an alias for `durationMs`
+---@field progress boolean|nil     draw the lifetime bar. Ignored when persistent
+---@field color string|nil         `#RRGGBB`, overriding the kind's accent
+---@field data table|nil           opaque, echoed in the removal event. At most 64 nodes,
+---                                4 levels deep
+
+--- One live toast, as `list` answers it and as it reaches the page. `owner` and `data` are
+--- deliberately absent: the page has no use for either, and `data` belongs to its caller.
+---@class NotifyEntry
+---@field handle integer
+---@field id string
+---@field type NotifyKind
+---@field title string      "" when there is none
+---@field message string
+---@field icon string       "" when there is none
+---@field position NotifyPosition
+---@field durationMs integer
+---@field progress boolean  already reduced: false whenever `durationMs` is 0
+---@field color string      the resolved `#RRGGBB`, never nil
+
+--- The payload of `open77:notificationRemoved` and of `opx77:notify:removed`.
+---@class NotifyRemoved
+---@field handle integer
+---@field id string
+---@field owner string     the resource that raised it, or "@server:<resource>"
+---@field reason NotifyReason
+---@field data table       the caller's opaque table, `{}` when there was none
+
+--- What every export answers. `ok` is always present; `error` only when `ok` is false.
+---@class NotifyResponse
+---@field ok boolean
+---@field error string|nil
+---@field handle integer|nil          `show` and `update`
+---@field id string|nil               `show` and `update`
+---@field replaced boolean|nil        `show`, when it replaced one of yours
+---@field removed integer|nil         `clear`
+---@field enabled boolean|nil         `setEnabled` and `isEnabled`
+---@field notifications NotifyEntry[]|nil  `list`
+---@field count integer|nil           `list`

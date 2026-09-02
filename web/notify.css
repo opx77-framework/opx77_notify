@@ -1,0 +1,199 @@
+/* The toast stacks. Every value comes from open77-ui.css. */
+
+/* Night City yellow, as an accent-role override rather than a literal at each use site, so
+   this surface reads as part of the same framework as opx77_hud. --op77-ink is the text ON
+   this fill. The four KIND accents below are NOT overridden: they are the platform's signal
+   colours and they are duplicated in client/state.lua, which sends the same literals down as
+   `color`. Change one and change the other. */
+:root {
+  --op77-accent:      #fcee0a;
+  --op77-accent-ice:  #fff761;
+  --op77-accent-deep: #d4c500;
+  --op77-accent-soft: rgba(252, 238, 10, 0.13);
+  --op77-accent-line: rgba(252, 238, 10, 0.45);
+  --op77-ink:         #0a0a05;
+
+  /* Overwritten per surface by notify.js from OPX_NOTIFY_CONFIG.WIDTH. */
+  --toast-width: 340px;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--op77-font-body);
+  color: var(--op77-text);
+  /* Not redundant, and not a nicety: this surface is composited over live gameplay and is
+     never focused. Without it a transparent full-screen page would swallow the cursor. */
+  pointer-events: none;
+  user-select: none;
+}
+
+/* --------------------------------------------------------------- the stacks */
+
+.stack {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: var(--op77-space-2);
+  width: var(--toast-width);
+  max-width: calc(100vw - var(--op77-inset-x) * 2);
+}
+
+.stack.top_left,
+.stack.top_center,
+.stack.top_right { top: var(--op77-inset-y); }
+
+/* Bottom stacks grow upward: `column-reverse` puts the newest toast nearest the edge, which
+   is where the eye already is. The DOM order is the same in every stack -- notify.js always
+   appends -- so nothing in the script has to know which way a stack grows. */
+.stack.bottom_left,
+.stack.bottom_center,
+.stack.bottom_right {
+  bottom: var(--op77-inset-y);
+  flex-direction: column-reverse;
+}
+
+.stack.top_left,
+.stack.bottom_left,
+.stack.middle_left { left: var(--op77-inset-x); }
+
+.stack.top_right,
+.stack.bottom_right { right: var(--op77-inset-x); }
+
+.stack.top_center,
+.stack.bottom_center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* The one position with no vertical partner in the platform's set. */
+.stack.middle_left {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* --------------------------------------------------------------- one toast */
+
+.toast {
+  --accent: var(--op77-accent);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--op77-space-3);
+  padding: var(--op77-space-3) var(--op77-space-4);
+  /* the leading accent rule, the house marker for "this belongs to Open77" */
+  border-left: var(--op77-rule) solid var(--accent);
+  background: var(--op77-panel);
+  border-top: 1px solid var(--op77-line-hud);
+  border-right: 1px solid var(--op77-line-hud);
+  border-bottom: 1px solid var(--op77-line-hud);
+  box-shadow: var(--op77-shadow);
+  /* the cut corner, from the token file rather than a literal polygon */
+  clip-path: var(--op77-notch-clip);
+  animation: toast-in var(--op77-dur) var(--op77-ease);
+  transition: opacity var(--op77-dur-slow) var(--op77-ease),
+              transform var(--op77-dur-slow) var(--op77-ease);
+}
+
+.toast .icon {
+  flex: none;
+  min-width: 18px;
+  padding-top: 1px;
+  font: 900 var(--op77-fs-meta) / 1.2 var(--op77-font-mono);
+  letter-spacing: var(--op77-track-label);
+  text-transform: uppercase;
+  color: var(--accent);
+  /* an icon is up to 16 bytes of caller text, so it wraps rather than pushing the body out */
+  overflow-wrap: anywhere;
+  max-width: 64px;
+}
+
+.toast .body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.toast .title {
+  font: 700 var(--op77-fs-title) / 1.15 var(--op77-font-display);
+  letter-spacing: var(--op77-track-head);
+  text-transform: uppercase;
+  color: var(--op77-text);
+  overflow-wrap: anywhere;
+}
+
+.toast .message {
+  font: 400 var(--op77-fs-body) / 1.35 var(--op77-font-body);
+  color: var(--op77-text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* The lifetime bar. Its width is the page's own arithmetic against one absolute deadline;
+   nothing here animates it, so a frame the browser skips costs no accuracy. */
+.toast .bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent);
+}
+
+/* The four kinds. `--accent` is a fallback only: notify.js writes the resolved colour Lua
+   sent onto the element, and Lua's defaults are these same four literals. A toast whose
+   colour failed the `#RRGGBB` test in the page still gets its kind's accent from here. */
+.toast.info    { --accent: #22d8e2; }
+.toast.success { --accent: #4fe3a9; }
+.toast.warning { --accent: #f5c95c; }
+.toast.error   { --accent: #ff5964; }
+
+/* An error is the one kind allowed to raise its own contrast: it is the one a player must
+   not miss, and the panel behind it is otherwise identical to a routine one. */
+.toast.error .message { color: var(--op77-text); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
+.stack.bottom_left .toast,
+.stack.bottom_center .toast,
+.stack.bottom_right .toast { animation-name: toast-in-up; }
+
+@keyframes toast-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.stack.top_right .toast,
+.stack.bottom_right .toast { animation-name: toast-in-right; }
+
+@keyframes toast-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+.stack.top_left .toast,
+.stack.bottom_left .toast,
+.stack.middle_left .toast { animation-name: toast-in-left; }
+
+@keyframes toast-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+}
+
+/* Leaving. The node stays in the DOM for EXIT_MS in notify.js, which is longer than
+   --op77-dur-slow; shorten one and the other has to move with it. */
+.toast.out {
+  opacity: 0;
+  transform: scale(0.98);
+}

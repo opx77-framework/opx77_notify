@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.4",
+  "runtime.pathStrict": true,
+  "runtime.path": [
+    "?.lua",
+    "?/init.lua"
+  ],
+  "workspace.checkThirdParty": false,
+  "diagnostics.globals": [
+    "OpxNotify",
+    "OPX_NOTIFY_CONFIG",
+    "Open77",
+    "WebUI",
+    "CreateThread",
+    "Wait",
+    "AddEventHandler",
+    "TriggerEvent",
+    "RegisterNetEvent",
+    "GetCurrentResourceName",
+    "GetResourceState",
+    "GetInvokingResource",
+    "GetInvokingResourceGeneration",
+    "exports",
+    "print"
+  ],
+  "diagnostics.disable": [
+    "lowercase-global"
+  ],
+  "diagnostics.severity": {
+    "undefined-global": "Error",
+    "unused-local": "Warning",
+    "unused-function": "Warning"
+  },
+  "format.enable": true,
+  "format.defaultConfig": {
+    "indent_style": "space",
+    "indent_size": "2",
+    "max_line_length": "100",
+    "quote_style": "double"
+  },
+  "workspace.ignoreDir": [
+    ".claude",
+    "tools"
+  ]
+}

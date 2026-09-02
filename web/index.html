@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPX77 Notify</title>
+<link rel="stylesheet" href="open77-ui.css">
+<link rel="stylesheet" href="notify.css">
+</head>
+<body>
+
+<!-- Seven stacks, one per position the platform's schema defines. There is no middle_right
+     and no middle_center: the published set is asymmetric, and inventing the missing two
+     would give a caller a position the official package refuses.
+
+     Nothing here is focusable and nothing takes a pointer: this surface is on the "hud"
+     layer, is never given focus, and web/notify.css sets `pointer-events: none` on the
+     document. A toast that could be clicked would be a toast that could steal an aim. -->
+<div class="stack top_left" id="stack_top_left"></div>
+<div class="stack top_center" id="stack_top_center"></div>
+<div class="stack top_right" id="stack_top_right"></div>
+<div class="stack middle_left" id="stack_middle_left"></div>
+<div class="stack bottom_left" id="stack_bottom_left"></div>
+<div class="stack bottom_center" id="stack_bottom_center"></div>
+<div class="stack bottom_right" id="stack_bottom_right"></div>
+
+<script src="notify.js"></script>
+</body>
+</html>
