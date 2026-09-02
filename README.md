@@ -9,23 +9,16 @@
 
 The toast service for **Opx77**: one surface, owned by this resource, that any other resource can put a notice on.
 
-It is client-side, because that is the only side exports exist on — the OPEN//77 server runtime installs no `exports` and no `GetInvokingResource`, so a server-side notification service could not be called by anything.
+It is client-side, because that is the only side exports exist on — the OPEN//77 server runtime installs no `exports` and no `GetInvokingResource`.
 
-## Drop-in on both sides
+## Drop-in on both sides, with one break
 
-This is the part worth reading before anything else, because it is why this resource exists in the shape it does.
+A server resource that already uses `Open77.notifications.send`, `broadcast`, `update`, `dismiss` or `clear` needs no change: those functions do nothing but fire the four `open77:notifications:show` / `:update` / `:dismiss` / `:clear` net events at the target, and this resource listens for exactly those names.
 
-**A server resource that already uses the standard API needs no change.** The platform's server Lua bootstrap ships `Open77.notifications.send`, `broadcast`, `update`, `dismiss` and `clear` inside every server VM. Recovered from the shipped server binary, all any of them does is fire a net event at the target:
+A client resource written against the official export names needs no change either: the exports below are the names the platform documents on its own `open77_notifications` package, with the same arguments, the same definition schema and the same limits.
 
-```lua
-TriggerClientEvent("open77:notifications:show", target, {
-  owner = GetCurrentResourceName(), id = id, definition = definition,
-})
-```
-
-and `update`, `dismiss` and `clear` are the same shape on `open77:notifications:update`, `:dismiss` and `:clear`. Nothing in that code names, checks for, or depends on the official `open77_notifications` client package — it fires four names and hopes something is listening. **`opx77_notify` listens for those four names**, so a server resource written against `Open77.notifications.*` renders in OPX//77's toasts without changing a line.
-
-**A client resource written against the official export names needs no change either.** The exports below are the names the platform documents on its own package, with the same arguments, the same definition schema and the same limits.
+> [!IMPORTANT]
+> **The break: `open77:notificationRemoved` is not raised.** That is the name the platform documents for its own `open77_notifications` package. This resource raises [`opx77:notify:removed`](#events) instead, with the same payload and the same reasons. A resource listening for the platform's name hears nothing about a removal and has to be pointed at `opx77:notify:removed`. Everything else is unchanged: the four inbound net events, the export names, their arguments, the definition schema and the limits.
 
 > [!WARNING]
 > **Do not run this and `open77_notifications` at the same time.**
@@ -41,19 +34,13 @@ and `update`, `dismiss` and `clear` are the same shape on `open77:notifications:
 - Toasts go on their own when their owner stops, reloads, or turns itself off
 - A transparent surface that never takes focus and never captures the cursor
 
-## Top right, not middle left
-
-`OPX_NOTIFY_CONFIG.POSITION` defaults to `"top_right"`. The official package defaults to `"middle_left"`.
-
-This is a deliberate departure and the only default that differs. The top right is where this framework's other surfaces already put transient notices — `opx77_hud`'s info column is anchored there by default — and a player who has learned to read one corner for "something just happened" should not have to learn a second one. A caller that names a `position` explicitly still gets exactly the position it named, so a resource ported from the official package keeps its own placement.
-
 ## Commands
 
 None. It carries everybody else's notices and registers nothing of its own.
 
 ## Exports
 
-Client-side, and deliberately the names the platform documents on its own `open77_notifications` package, with the same arguments — code written against the documented notification surface works here without a change.
+Client-side, and deliberately the names the platform documents on its own `open77_notifications` package, with the same arguments.
 
 | Export | Does |
 |---|---|
@@ -65,9 +52,9 @@ Client-side, and deliberately the names the platform documents on its own `open7
 | `setEnabled(enabled)` | turn your own toasts off, or back on |
 | `isEnabled()` | whether yours are on |
 
-Every call answers `{ ok = boolean }`, with an `error` code when `ok` is false. The official package returns bare booleans from `isEnabled` and a bare array from `list`; a caller that only tests truthiness reads `{ ok = true }` as true either way, and one that wants the reason now has it. Every code is listed in the header of `client/exports.lua` and on the documentation site.
+The caller is read from the host with `GetInvokingResource()`, never from an argument: no parameter on this surface names an owner, so a resource cannot claim to be another one. Every toast belongs to the resource that raised it — `update`, `dismiss`, `clear` and `list` only ever reach your own, and `setEnabled` is per caller, not global.
 
-The caller is read from the host with `GetInvokingResource()`, never from an argument: there is no parameter anywhere on this surface that names an owner, so a resource cannot claim to be another one.
+Every call answers `{ ok = boolean }`, with an `error` code when `ok` is false. The official package returns bare booleans from `isEnabled` and a bare array from `list`; a caller that only tests truthiness reads `{ ok = true }` as true either way.
 
 Like every export on this platform the call is asynchronous, so it answers a promise and has to be awaited inside a `CreateThread`. Failure has three levels and they mean different things: the call was never dispatched, it was dispatched and could not resolve, or it resolved into a refusal — only the last one is authoritative.
 
@@ -91,6 +78,32 @@ CreateThread(function()
 end)
 ```
 
+### Error codes
+
+| Code | Means |
+|---|---|
+| `export_call_required` | called from inside this resource, or without the export machinery, so there is no invoking resource to attribute the call to |
+| `no_surface` | `WebUI.create` failed at start; there is no page and never will be for this generation. A page that exists but has not yet reported ready is not this: the toast is held and replayed |
+| `owner_disabled` | you called `setEnabled(false)` and have not called it back on |
+| `definition_must_be_a_table` | the definition (or the replacement) is not a table |
+| `patch_must_be_a_table` | the patch handed to `update` is not a table |
+| `invalid_type` | `type`/`kind` is not `info`, `success`, `warning` or `error` |
+| `invalid_notification_id` | `id` is not 1..96 characters of `[%w_:%-%.]` |
+| `invalid_title` | `title` is over 96 bytes, not a string, or has a control character |
+| `invalid_message` | `message`/`text` is missing, empty, over 384 bytes, not a string, or has a control character |
+| `invalid_icon` | `icon` is over 16 bytes, not a string, or has a control character |
+| `invalid_position` | `position` is not one of the seven |
+| `invalid_duration` | `durationMs`/`duration` is not `0` and not an integer in 750..120000 |
+| `invalid_progress` | `progress` is present and is not a boolean |
+| `invalid_color` | `color` is present and is not `#RRGGBB` |
+| `data_too_large` | `data` is a table over 64 nodes or 4 levels deep |
+| `duplicate_notification_id` | you already hold this id and did not pass `replace = true` |
+| `notification_limit` | 32 toasts are already held, across every owner |
+| `notification_not_found` | no live toast has that handle |
+| `not_owner` | that handle belongs to another resource |
+
+There is no code for "the page has not loaded yet" — that is not a failure — and a handle that is not a number answers `notification_not_found`, as the official package does.
+
 ## The definition
 
 | Field | Meaning |
@@ -105,26 +118,31 @@ end)
 | `durationMs` / `duration` | `0` is persistent; a timed value is 750–120000. |
 | `progress` | Draw the lifetime bar. Ignored when persistent. |
 | `color` | Optional `#RRGGBB` accent, overriding the kind's. |
-| `data` | Opaque, echoed back in the removal event. |
+| `data` | Opaque, echoed back in the removal event. At most 64 nodes, 4 levels deep. |
 
-At most **32** toasts are held at once and at most **eight per position**; adding a ninth to a position evicts that position's oldest. Those are the platform's numbers, not ours — loosening them would make this resource behave differently from the package it stands in for.
+Where both spellings of an aliased field are present the primary one wins: `type` over `kind`, `message` over `text`, `durationMs` over `duration`. A patch handed to `update` that says nothing about the duration keeps the deadline the toast already had.
+
+At most **32** toasts are held at once and at most **eight per position**; adding a ninth to a position evicts that position's oldest. Those are the platform's numbers.
+
+The seven positions are `top_left`, `top_center`, `top_right`, `middle_left`, `bottom_left`, `bottom_center` and `bottom_right`. There is no `middle_right` and no `middle_center`.
 
 ## Events
 
-Both are **local**, raised with `TriggerEvent` on the client's host-wide bus and received with a bare `AddEventHandler`. Neither is a wire name.
+One event, `opx77:notify:removed`, raised whenever a toast goes away, for every owner. It is **local**: raised with `TriggerEvent` on the client's host-wide bus and received with a bare `AddEventHandler`. It is not a wire name.
 
-| Event | Raised |
-|---|---|
-| `open77:notificationRemoved` | whenever a toast goes away, for every owner |
-| `opx77:notify:removed` | the same payload, under this framework's namespace |
+```lua
+AddEventHandler("opx77:notify:removed", function(payload) end)
+```
 
-The payload carries `handle`, `id`, `owner`, `reason` and `data`. Reasons are `expired`, `dismissed`, `queue_limit`, `owner_cleared`, `owner_disabled`, `owner_reloaded`, `owner_stopped`, `server_dismissed` and `server_cleared`.
+The payload carries `handle`, `id`, `owner`, `reason` and `data`. Reasons are `expired`, `dismissed`, `queue_limit`, `owner_cleared`, `owner_disabled`, `owner_reloaded`, `owner_stopped`, `server_dismissed` and `server_cleared`. `owner` is the raising resource's name, or `@server:<resource>` for a server-sent toast.
 
-A listener registered for both hears about one removal twice. Pick one.
+The platform's `open77:notificationRemoved` is **not** raised — see [Drop-in on both sides, with one break](#drop-in-on-both-sides-with-one-break).
 
 ## Configuration
 
 `config.lua`. Where a toast goes when its definition does not say, how long it lives, whether it draws a lifetime bar, and how wide the stack is.
+
+`POSITION` defaults to `"top_right"`, where this framework's other surfaces put transient notices; the official package defaults to `"middle_left"`. It is the only default that differs, and a caller that names a `position` explicitly still gets the one it named.
 
 ## Community & Support
 

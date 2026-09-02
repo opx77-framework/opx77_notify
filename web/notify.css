@@ -1,10 +1,7 @@
 /* The toast stacks. Every value comes from open77-ui.css. */
 
-/* Night City yellow, as an accent-role override rather than a literal at each use site, so
-   this surface reads as part of the same framework as opx77_hud. --op77-ink is the text ON
-   this fill. The four KIND accents below are NOT overridden: they are the platform's signal
-   colours and they are duplicated in client/state.lua, which sends the same literals down as
-   `color`. Change one and change the other. */
+/* Night City yellow, as an accent-role override. The four kind accents below are the
+   platform's signal colours and are duplicated in client/state.lua; change both together. */
 :root {
   --op77-accent:      #fcee0a;
   --op77-accent-ice:  #fff761;
@@ -33,8 +30,7 @@ body {
   background: transparent;
   font-family: var(--op77-font-body);
   color: var(--op77-text);
-  /* Not redundant, and not a nicety: this surface is composited over live gameplay and is
-     never focused. Without it a transparent full-screen page would swallow the cursor. */
+  /* without this a transparent full-screen page composited over gameplay swallows the cursor */
   pointer-events: none;
   user-select: none;
 }
@@ -54,9 +50,8 @@ body {
 .stack.top_center,
 .stack.top_right { top: var(--op77-inset-y); }
 
-/* Bottom stacks grow upward: `column-reverse` puts the newest toast nearest the edge, which
-   is where the eye already is. The DOM order is the same in every stack -- notify.js always
-   appends -- so nothing in the script has to know which way a stack grows. */
+/* Bottom stacks grow upward, so the newest toast is nearest the edge. The DOM order is the
+   same in every stack, so notify.js never has to know which way one grows. */
 .stack.bottom_left,
 .stack.bottom_center,
 .stack.bottom_right {
@@ -141,8 +136,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* The lifetime bar. Its width is the page's own arithmetic against one absolute deadline;
-   nothing here animates it, so a frame the browser skips costs no accuracy. */
+/* The lifetime bar. Its width is set per frame by notify.js, not animated here. */
 .toast .bar {
   position: absolute;
   left: 0;
@@ -152,16 +146,13 @@ body {
   background: var(--accent);
 }
 
-/* The four kinds. `--accent` is a fallback only: notify.js writes the resolved colour Lua
-   sent onto the element, and Lua's defaults are these same four literals. A toast whose
-   colour failed the `#RRGGBB` test in the page still gets its kind's accent from here. */
+/* The four kinds. A fallback only: notify.js writes the resolved colour Lua sent. */
 .toast.info    { --accent: #22d8e2; }
 .toast.success { --accent: #4fe3a9; }
 .toast.warning { --accent: #f5c95c; }
 .toast.error   { --accent: #ff5964; }
 
-/* An error is the one kind allowed to raise its own contrast: it is the one a player must
-   not miss, and the panel behind it is otherwise identical to a routine one. */
+/* An error is the one kind allowed to raise its own contrast. */
 .toast.error .message { color: var(--op77-text); }
 
 @keyframes toast-in {
@@ -191,8 +182,7 @@ body {
   from { opacity: 0; transform: translateX(-12px); }
 }
 
-/* Leaving. The node stays in the DOM for EXIT_MS in notify.js, which is longer than
-   --op77-dur-slow; shorten one and the other has to move with it. */
+/* Leaving. The node stays in the DOM for EXIT_MS in notify.js, which is >= --op77-dur-slow. */
 .toast.out {
   opacity: 0;
   transform: scale(0.98);

@@ -1,15 +1,9 @@
-/* opx77_notify -- the page.
- *
- * A renderer and nothing else. Lua decides which toasts exist, what they say, where they
- * go and when they end; this draws them and animates one lifetime bar each. The only
- * outbound channels are `notify:ready` and a diagnostic one.
- */
+/* opx77_notify -- the page: a renderer for the toasts Lua sends, and one lifetime bar each. */
 (function () {
   "use strict";
 
-  /* CEF console output does not reach the client log, and the WebUI bridge swallows every
-     exception thrown inside an `Open77.on` handler. Without this, a throw in here is
-     invisible from the server console. */
+  /* CEF console output does not reach the client log and the bridge swallows every throw
+     inside an `Open77.on` handler, so failures are reported over `notify:diag` instead. */
   var reportCount = 0;
   var reporting = false;
 
@@ -43,9 +37,7 @@
 
   function text(value) { return value === null || value === undefined ? "" : String(value); }
 
-  /* The seven the schema defines, and the four kinds. Both are closed sets: an unrecognised
-     value falls back rather than reaching a class name, so nothing Lua sends can invent a
-     selector. */
+  /* Closed sets: an unrecognised value falls back rather than reaching a class name. */
   var POSITIONS = ["top_left", "top_center", "top_right", "middle_left",
                    "bottom_left", "bottom_center", "bottom_right"];
   var KINDS = { info: true, success: true, warning: true, error: true };
@@ -53,15 +45,11 @@
   /* Written straight into a custom property, so it is matched before it is written. */
   var HEX = /^#[0-9a-fA-F]{6}$/;
 
-  /* The page's own ceilings, independent of Lua's. Lua holds at most 32 toasts and at most
-     eight per position; these repeat those numbers here because a renderer that trusts its
-     sender for its own memory bound has no bound. */
+  /* The page's own ceilings, repeating Lua's rather than trusting the sender for them. */
   var MAX_PER_STACK = 8;
   var MAX_TOTAL = 32;
 
-  /* How long a leaving toast stays in the DOM so its exit transition can run. It must be at
-     least as long as --op77-dur-slow in open77-ui.css, and it is not a visual constant: a
-     shorter value would delete the node mid-transition. */
+  /* How long a leaving toast stays in the DOM. Must be >= --op77-dur-slow in open77-ui.css. */
   var EXIT_MS = 260;
 
   var stacks = {};
@@ -95,14 +83,12 @@
     }
   }
 
-  /* One element per handle, kept for as long as Lua keeps that handle: rebuilding it on an
-     update would restart the entrance animation and the countdown. */
+  /* One element per handle: rebuilding it on an update would restart the entrance animation. */
   function toast(handle) {
     var entry = toasts[handle];
     if (entry !== undefined && !entry.leaving) return entry;
 
-    /* A handle whose node is on its way out is replaced rather than reused: the old node is
-       mid-transition and re-entering it would leave the exit class on a live toast. */
+    /* A leaving node is replaced, not reused: it is mid-transition and still carries "out". */
     if (entry !== undefined && entry.leaving) drop(handle, true);
 
     entry = {
@@ -128,8 +114,7 @@
     return entry;
   }
 
-  /* Take a node out now (`immediate`) or after its exit transition. `immediate` is for
-     eviction and for replacing a leaving handle, where there is nothing to animate. */
+  /* Take a node out now (`immediate`) or after its exit transition. */
   function drop(handle, immediate) {
     var entry = toasts[handle];
     if (entry === undefined) return;
@@ -150,9 +135,8 @@
     }, EXIT_MS);
   }
 
-  /* The page's own eviction, matching Lua's rule: the oldest in this stack goes. `children`
-     is in insertion order and a leaving node is skipped, so the oldest LIVE node is the
-     first child that is not on its way out. */
+  /* The page's own eviction, matching Lua's: the oldest live node in this stack goes.
+     `children` is in insertion order, so that is the first child not on its way out. */
   function evict(stack) {
     var live = 0;
     var oldest = null;
@@ -187,8 +171,7 @@
 
     entry.message.textContent = text(row.message);
 
-    /* Absolute, so the countdown is this page's own arithmetic from here on. Lua sends a
-       duration, never a remaining time: the two clocks never have to agree. */
+    /* Lua sends a duration, never a remaining time, so the two clocks never have to agree. */
     var durationMs = Number(row.durationMs);
     var timed = row.progress === true && isFinite(durationMs) && durationMs > 0;
     entry.totalMs = timed ? durationMs : null;
@@ -202,9 +185,7 @@
     var handle = Number(row.handle);
     if (!isFinite(handle)) return;
 
-    /* Lua's ceiling is 32 and it refuses past it, so reaching this one means something else
-       is talking to this page. Dropping the incoming toast is the safe direction: it keeps
-       what is already on screen readable rather than churning it. */
+    /* Lua refuses past 32, so reaching this means something else is talking to this page. */
     if (toasts[handle] === undefined && liveCount >= MAX_TOTAL) return;
 
     var position = text(row.position);
@@ -227,8 +208,7 @@
     var handle = Number(row.handle);
     if (!isFinite(handle)) return;
     var entry = toasts[handle];
-    /* An update for a handle this page never drew is an add. It happens when a surface is
-       created after a toast was raised, or after this page reloaded under a live resource. */
+    /* An update for a handle this page never drew is an add: the page may have reloaded. */
     if (entry === undefined || entry.leaving) { add(row); return; }
     apply(entry, row);
 
@@ -243,8 +223,7 @@
     pump();
   }
 
-  /* One rAF loop for every bar on screen; it stops itself once none of them has a deadline
-     left to draw. */
+  /* One rAF loop for every bar on screen; it stops itself once none has a deadline left. */
   var pending = false;
 
   function frame() {
@@ -286,8 +265,7 @@
   });
 
   /* `notify:ready` MUST be emitted whatever happened above: Lua drops every message until
-     the page has reported ready, so a throw before this costs the surface every toast it is
-     ever sent. */
+     the page has reported ready. */
   try { Open77.ready(); } catch (error) { report("ready: " + describe(error)); }
   Open77.emit("notify:ready", {});
 })();

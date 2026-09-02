@@ -9,13 +9,8 @@
 </head>
 <body>
 
-<!-- Seven stacks, one per position the platform's schema defines. There is no middle_right
-     and no middle_center: the published set is asymmetric, and inventing the missing two
-     would give a caller a position the official package refuses.
-
-     Nothing here is focusable and nothing takes a pointer: this surface is on the "hud"
-     layer, is never given focus, and web/notify.css sets `pointer-events: none` on the
-     document. A toast that could be clicked would be a toast that could steal an aim. -->
+<!-- One stack per position the platform's schema defines. Nothing here is focusable and
+     notify.css sets `pointer-events: none` on the document. -->
 <div class="stack top_left" id="stack_top_left"></div>
 <div class="stack top_center" id="stack_top_center"></div>
 <div class="stack top_right" id="stack_top_right"></div>

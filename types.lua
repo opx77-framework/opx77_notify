@@ -1,13 +1,10 @@
 ---@meta
---- Type annotations for opx77_notify. Never loaded at runtime, and never listed in
---- open77.lua: `---@meta` is a language-server file, and a manifest entry would run it.
+--- Type annotations for opx77_notify. Never loaded at runtime, never listed in open77.lua.
 
 --- The four kinds. Each supplies a default accent; `color` overrides it.
 ---@alias NotifyKind "info"|"success"|"warning"|"error"
 
---- The platform's seven positions. The set is asymmetric in the published schema -- there is
---- no `middle_right` and no `middle_center` -- and this resource does not invent the missing
---- two, because the official package refuses them.
+--- The platform's seven positions. There is no `middle_right` and no `middle_center`.
 ---@alias NotifyPosition
 ---| "top_left"
 ---| "top_center"
@@ -17,7 +14,7 @@
 ---| "bottom_center"
 ---| "bottom_right"
 
---- Why a toast went away, as it reaches `open77:notificationRemoved`.
+--- Why a toast went away, as it reaches `opx77:notify:removed`.
 ---@alias NotifyReason
 ---| "expired"          its duration elapsed
 ---| "dismissed"        its owner called `dismiss`
@@ -30,10 +27,8 @@
 ---| "server_cleared"   the server resource that sent it called `Open77.notifications.clear`
 
 --- The definition handed to `show`, and the patch handed to `update`. Only the body is
---- required, and it may be spelled either way.
----
---- Three fields carry a documented alias. Where both spellings are present the primary one
---- wins: `type` over `kind`, `message` over `text`, `durationMs` over `duration`.
+--- required. Where both spellings of an aliased field are present the primary one wins:
+--- `type` over `kind`, `message` over `text`, `durationMs` over `duration`.
 ---@class NotifyDefinition
 ---@field id string|nil            stable and owner-local, 1..96 chars of [%w_:%-%.].
 ---                                Defaults to `notification_<handle>`
@@ -54,7 +49,7 @@
 ---                                4 levels deep
 
 --- One live toast, as `list` answers it and as it reaches the page. `owner` and `data` are
---- deliberately absent: the page has no use for either, and `data` belongs to its caller.
+--- deliberately absent.
 ---@class NotifyEntry
 ---@field handle integer
 ---@field id string
@@ -67,7 +62,7 @@
 ---@field progress boolean  already reduced: false whenever `durationMs` is 0
 ---@field color string      the resolved `#RRGGBB`, never nil
 
---- The payload of `open77:notificationRemoved` and of `opx77:notify:removed`.
+--- The payload of `opx77:notify:removed`.
 ---@class NotifyRemoved
 ---@field handle integer
 ---@field id string
