@@ -33,8 +33,17 @@ local surfaceAttempted = false
 local Runtime = {}
 OpxNotify.runtime = Runtime
 
+--- The scheduler clock in milliseconds; `monotonic` answers SECONDS. A non-finite reading is
+--- dropped rather than propagated: a NaN would expire nothing, an infinity everything.
+---@return integer
+local lastMs = 0
 local function nowMs()
-  return math.floor(Open77.time.monotonic() * 1000)
+  local read, seconds = pcall(Open77.time.monotonic)
+  if read and type(seconds) == "number" and seconds == seconds and
+    seconds >= 0 and seconds < math.huge then
+    lastMs = math.floor(seconds * 1000)
+  end
+  return lastMs
 end
 
 ---@param action string one of "config", "add", "update", "remove"
@@ -367,6 +376,19 @@ local function onPageReady()
   for index = 1, count do send("add", State.payload(State.entries[handles[index]])) end
 end
 
+--- Run one loop pass under `pcall`. A raise from a host call would otherwise end the loop for
+--- the session, and a loop that fails every pass must not write a line every pass either.
+---@param label string
+---@param body fun()
+---@param failing boolean  whether the previous pass already failed
+---@return boolean failing
+local function guarded(label, body, failing)
+  local ok, reason = pcall(body)
+  if ok then return false end
+  if not failing then Open77.log.error(("%s failed: %s"):format(label, tostring(reason))) end
+  return true
+end
+
 AddEventHandler("onClientResourceStart", function(name)
   if name ~= RESOURCE then return end
 
@@ -402,10 +424,9 @@ AddEventHandler("onClientResourceStart", function(name)
   end)
 
   CreateThread(function()
+    local failing = false
     while true do
-      -- pcall: a raise from a host call here would end expiry and the sweep for the session
-      local ok, err = pcall(tick)
-      if not ok then Open77.log.error("tick raised: " .. tostring(err)) end
+      failing = guarded("the toast tick", tick, failing)
       Wait(TICK_MS)
     end
   end)
