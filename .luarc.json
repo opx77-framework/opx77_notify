@@ -40,7 +40,6 @@
     "quote_style": "double"
   },
   "workspace.ignoreDir": [
-    ".claude",
-    "tools"
+    ".claude"
   ]
 }

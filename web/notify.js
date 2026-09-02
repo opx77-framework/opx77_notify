@@ -59,7 +59,7 @@
 
   var settings = { position: "top_right" };
 
-  /* handle -> { node, title, message, icon, bar, position, endsAt, totalMs, leaving } */
+  /* handle -> { node, title, message, icon, bar, position, endsAt, totalMs } */
   var toasts = {};
   var liveCount = 0;
 
@@ -86,10 +86,7 @@
   /* One element per handle: rebuilding it on an update would restart the entrance animation. */
   function toast(handle) {
     var entry = toasts[handle];
-    if (entry !== undefined && !entry.leaving) return entry;
-
-    /* A leaving node is replaced, not reused: it is mid-transition and still carries "out". */
-    if (entry !== undefined && entry.leaving) drop(handle, true);
+    if (entry !== undefined) return entry;
 
     entry = {
       node: document.createElement("article"),
@@ -99,8 +96,7 @@
       bar: span("bar"),
       position: null,
       endsAt: null,
-      totalMs: null,
-      leaving: false
+      totalMs: null
     };
     var body = document.createElement("div");
     body.className = "body";
@@ -118,11 +114,8 @@
   function drop(handle, immediate) {
     var entry = toasts[handle];
     if (entry === undefined) return;
-    if (!entry.leaving) {
-      entry.leaving = true;
-      liveCount -= 1;
-    }
     delete toasts[handle];
+    liveCount -= 1;
     var node = entry.node;
     if (immediate) {
       if (node.parentNode) node.remove();
@@ -150,7 +143,6 @@
     for (var handle in toasts) {
       if (toasts[handle].node === oldest) { drop(handle, true); return; }
     }
-    oldest.remove();
   }
 
   function apply(entry, row) {
@@ -209,7 +201,7 @@
     if (!isFinite(handle)) return;
     var entry = toasts[handle];
     /* An update for a handle this page never drew is an add: the page may have reloaded. */
-    if (entry === undefined || entry.leaving) { add(row); return; }
+    if (entry === undefined) { add(row); return; }
     apply(entry, row);
 
     var position = text(row.position);

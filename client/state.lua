@@ -3,7 +3,7 @@
 OpxNotify = OpxNotify or {}
 
 --- Mirrors `version` in open77.lua, which no Lua code can read. A release moves both lines.
-OpxNotify.VERSION = "0.1.0"
+OpxNotify.VERSION = "0.2.0"
 
 local Config = OPX_NOTIFY_CONFIG
 
@@ -22,6 +22,10 @@ local MAX_OWNER = 64
 --- `0` is persistent; a timed toast is 750..120000 ms.
 local MIN_TIMED_MS = 750
 local MAX_TIMED_MS = 120000
+
+--- What an unnamed toast's id is built from. A caller may spell an id of this shape, so
+--- `State.autoId` steps past one that owner already holds.
+local AUTO_ID_PREFIX = "notification_"
 
 --- Bounds on a caller's opaque `data`, which rides in the removal event.
 local MAX_DATA_NODES = 64
@@ -142,6 +146,21 @@ function State.key(owner, id)
   return owner .. "\1" .. id
 end
 
+--- The id a definition that names none is given: `notification_<handle>`, or the next free
+--- number when this owner already holds that id.
+---@param owner string
+---@param handle integer|nil
+---@return string
+function State.autoId(owner, handle)
+  local number = handle or State.nextHandle
+  while true do
+    local id = AUTO_ID_PREFIX .. tostring(number)
+    local taken = State.identities[State.key(owner, id)]
+    if taken == nil or taken == handle then return id end
+    number = number + 1
+  end
+end
+
 --- Validate a definition and turn it into a stored entry. Whole or not at all: a refusal
 --- leaves nothing behind.
 ---@param owner string
@@ -162,7 +181,7 @@ function State.normalize(owner, definition, handle, atMs)
   if State.KINDS[kind] == nil then return nil, "invalid_type" end
 
   local id = definition.id
-  if id == nil then id = "notification_" .. tostring(handle or State.nextHandle) end
+  if id == nil then id = State.autoId(owner, handle) end
   if not State.validName(id, MAX_ID) then return nil, "invalid_notification_id" end
 
   local title = definition.title

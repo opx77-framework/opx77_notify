@@ -11,6 +11,15 @@ The toast service for **Opx77**: one surface, owned by this resource, that any o
 
 It is client-side, because that is the only side exports exist on — the OPEN//77 server runtime installs no `exports` and no `GetInvokingResource`.
 
+## Features
+
+- Four kinds — `info`, `success`, `warning`, `error` — each with its own accent
+- A title and a body, both rendered: the title is the heading, the body the line under it
+- Seven positions, timed or persistent toasts, and a lifetime bar the page animates itself
+- Ownership per calling resource: a resource only ever touches its own toasts
+- Toasts go on their own when their owner stops, reloads, or turns itself off
+- A transparent surface that never takes focus and never captures the cursor
+
 ## Drop-in on both sides, with one break
 
 A server resource that already uses `Open77.notifications.send`, `broadcast`, `update`, `dismiss` or `clear` needs no change: those functions do nothing but fire the four `open77:notifications:show` / `:update` / `:dismiss` / `:clear` net events at the target, and this resource listens for exactly those names.
@@ -24,15 +33,6 @@ A client resource written against the official export names needs no change eith
 > **Do not run this and `open77_notifications` at the same time.**
 >
 > Both listen on the same four `open77:notifications:*` net events and both publish the same export names, so every server-sent toast is drawn twice, on two surfaces, in two corners. The resource warns about it in the client log at start; drop one of the two from `resources.load` in `server.jsonc`.
-
-## Features
-
-- Four kinds — `info`, `success`, `warning`, `error` — each with its own accent
-- A title and a body, both rendered: the title is the heading, the body the line under it
-- Seven positions, timed or persistent toasts, and a lifetime bar the page animates itself
-- Ownership per calling resource: a resource only ever touches its own toasts
-- Toasts go on their own when their owner stops, reloads, or turns itself off
-- A transparent surface that never takes focus and never captures the cursor
 
 ## Commands
 
@@ -108,7 +108,7 @@ There is no code for "the page has not loaded yet" — that is not a failure —
 
 | Field | Meaning |
 |---|---|
-| `id` | Optional stable owner-local id, up to 96 characters of `[%w_:%-%.]`. |
+| `id` | Optional stable owner-local id, up to 96 characters of `[%w_:%-%.]`. Without one the toast is given `notification_<handle>`, stepped past an id of that shape you already hold. |
 | `replace` | Replace an existing toast of yours with the same `id` when `true`. |
 | `type` / `kind` | `info`, `success`, `warning` or `error`; defaults to `info`. |
 | `title` | Optional heading, up to 96 UTF-8 bytes. |
@@ -143,6 +143,10 @@ The platform's `open77:notificationRemoved` is **not** raised — see [Drop-in o
 `config.lua`. Where a toast goes when its definition does not say, how long it lives, whether it draws a lifetime bar, and how wide the stack is.
 
 `POSITION` defaults to `"top_right"`, where this framework's other surfaces put transient notices; the official package defaults to `"middle_left"`. It is the only default that differs, and a caller that names a `position` explicitly still gets the one it named.
+
+## Locales
+
+There is no `locales/` here and no `LOCALE` in `config.lua`, and that is deliberate: this resource renders the caller's own text — a title and a body it is handed, in whatever language the caller chose. The only strings it owns are `Open77.log` lines and the error codes, and neither is translated.
 
 ## Community & Support
 

@@ -1,24 +1,13 @@
 /* =============================================================================
    OPEN//77 - in-game UI design tokens
    =============================================================================
-
    MIRRORED FILE. Every in-game WebUI resource ships a byte-identical copy at
-   `<resource>/web/open77-ui.css`. Do not edit one copy: edit them all, then
-   verify they still match (the one-line check is in `docs/ui-design-system.md`).
+   `<resource>/web/open77-ui.css`, because each WebUI runs on its own isolated
+   virtual origin and cannot load a stylesheet living in another resource. Edit
+   every copy together; the check is in `docs/ui-design-system.md`.
 
-   Why a copy and not a shared file: each resource's WebUI runs under its own
-   isolated virtual origin and can only load files declared in its own manifest,
-   so `resources/A/web/index.html` cannot reference a stylesheet that lives in
-   `resources/B/web/`. There is no shared origin to put one file on. The same
-   reasoning is already recorded in the token blocks of `open77_pause` and
-   `open77_debug`; this file replaces those twelve divergent blocks with twelve
-   identical ones.
-
-   Source of truth: the OPEN//77 website design system -
-   `app/references/design-system.md` (the "OPEN SIGNAL" addendum, which the
-   document itself marks as superseding its section 1) and
-   `app/src/styles/legacy/01-tokens.css`. Values below are those values.
-   Deviations are marked `IN-GAME:` and each carries its reason.
+   Values come from the OPEN//77 website design system. Deviations are marked
+   `IN-GAME:` and each carries its reason.
    ========================================================================== */
 
 :root {
@@ -101,8 +90,8 @@
   --op77-font-body:    "Saira", "Bahnschrift", "Segoe UI", system-ui, sans-serif;
   --op77-font-mono:    "IBM Plex Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
 
-  /* HUD type scale. Larger than the website's page scale on purpose: this text
-     is read at arm's length over a moving image, not on a document. */
+  /* IN-GAME: larger than the website's page scale - read at arm's length over a
+     moving image, not on a document. */
   --op77-fs-micro:  9px;    /* mono eyebrow, letter-spacing .18em, UPPERCASE  */
   --op77-fs-label:  10px;   /* mono labels, keycaps                          */
   --op77-fs-meta:   11px;   /* mono data, secondary lines                    */
@@ -156,8 +145,8 @@
   --op77-dur-slow: 220ms;   /* a whole panel sliding in   */
 }
 
-/* The `//` device. Where it appears, nothing else glows.
-   Use as: <span class="op77-eyebrow">Session</span> */
+/* The `//` device: <span class="op77-eyebrow">Session</span>. Where it appears,
+   nothing else glows. */
 .op77-eyebrow {
   font: 700 var(--op77-fs-micro) / 1 var(--op77-font-mono);
   letter-spacing: var(--op77-track-micro);
@@ -172,8 +161,7 @@
   letter-spacing: -0.06em;
 }
 
-/* Animation enhances, it never gates: nothing here starts at opacity 0 without
-   a paired end state, and all of it is off when the player asked for less. */
+/* Animation enhances, it never gates. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

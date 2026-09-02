@@ -1,15 +1,13 @@
 resource "opx77_notify"
-version "0.1.0"
+version "0.2.0"
 open77_version ">=0.0.1"
 auto_start true
 
--- A resource that owns a WebUI surface declares "reconnect"; a rules resource declares "local".
+-- Swapping a live CEF surface mid-session is unstable, so a generation change reconnects.
 reload_policy "reconnect"
 
--- Load order is the contract: config publishes OPX_NOTIFY_CONFIG, state publishes the store,
--- main drives the surface and the wire, exports goes last.
--- Scripts are listed one per line on purpose: a script glob that matches nothing refuses the
--- whole session's resource set with `script_pattern_empty`.
+-- Load order is manifest order: config publishes OPX_NOTIFY_CONFIG, state the store, main
+-- the surface and the wire, exports last.
 client_script "config.lua"
 client_script "client/state.lua"
 client_script "client/main.lua"
@@ -22,7 +20,7 @@ web_ui_auto_create false -- client/main.lua creates it, so a failure is one logg
 web_files { "web/**" }
 
 permissions {
-  -- RegisterNetEvent for the four inbound `open77:notifications:*` names. Nothing here ever
-  -- calls TriggerServerEvent.
+  -- RegisterNetEvent for the four inbound open77:notifications:* names; nothing here ever
+  -- calls TriggerServerEvent
   "network.events",
 }

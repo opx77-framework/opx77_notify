@@ -26,12 +26,12 @@
 ---| "server_dismissed" the server resource that sent it called `Open77.notifications.dismiss`
 ---| "server_cleared"   the server resource that sent it called `Open77.notifications.clear`
 
---- The definition handed to `show`, and the patch handed to `update`. Only the body is
---- required. Where both spellings of an aliased field are present the primary one wins:
---- `type` over `kind`, `message` over `text`, `durationMs` over `duration`.
+--- The definition handed to `show` and the patch handed to `update`. Only the body is
+--- required; the primary spelling wins over the alias where both are present.
 ---@class NotifyDefinition
 ---@field id string|nil            stable and owner-local, 1..96 chars of [%w_:%-%.].
----                                Defaults to `notification_<handle>`
+---                                Defaults to `notification_<handle>`, stepped past an id
+---                                of that shape you already hold
 ---@field replace boolean|nil      replace an existing toast of yours with the same `id`.
 ---                                Without it a repeated id is `duplicate_notification_id`
 ---@field type NotifyKind|nil      defaults to "info"

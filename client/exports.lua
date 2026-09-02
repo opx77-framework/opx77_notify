@@ -3,15 +3,7 @@
 
 local State = OpxNotify.state
 local Runtime = OpxNotify.runtime
-
----@param ok boolean
----@param values table|nil
----@return table
-local function response(ok, values)
-  values = values or {}
-  values.ok = ok == true
-  return values
-end
+local response = Runtime.response
 
 --- Who is calling, and at which generation of their code, both read from the host so that a
 --- caller cannot claim to be another resource.
@@ -31,9 +23,8 @@ end
 --- Raise a toast. Answers the handle `update` and `dismiss` take.
 ---@param definition NotifyDefinition
 ---@return NotifyResponse # error: export_call_required, no_surface, owner_disabled,
---- definition_must_be_a_table, invalid_type, invalid_notification_id, invalid_title,
---- invalid_message, invalid_icon, invalid_position, invalid_duration, invalid_progress,
---- invalid_color, data_too_large, duplicate_notification_id, notification_limit
+--- duplicate_notification_id, notification_limit, or any of the definition's validation
+--- codes, which README.md lists
 exports("show", function(definition)
   local owner, reason = caller()
   if owner == nil then return response(false, { error = reason }) end

@@ -12,8 +12,8 @@ local RESOURCE = GetCurrentResourceName()
 --- was sent, on its own clock, so the two never have to agree.
 local TICK_MS = 100
 
---- How often every owner is re-checked against the host, as a backstop for a generation that
---- moved without a stop we saw.
+--- How often every owner is re-checked against the host, as a backstop to
+--- `onClientResourceStop`.
 local OWNER_SWEEP_MS = 1000
 
 --- The removal event. Local, never a wire name: raising a wire name would re-enter its own
@@ -93,14 +93,17 @@ end
 -- The operations, in terms of an owner that has already been established
 -- ---------------------------------------------------------------------------
 
+--- The shape every operation and every export answers.
 ---@param ok boolean
 ---@param values table|nil
 ---@return table
-local function response(ok, values)
+function Runtime.response(ok, values)
   values = values or {}
   values.ok = ok == true
   return values
 end
+
+local response = Runtime.response
 
 --- Refuse when there is no page and never will be. A page that exists but has not reported
 --- ready is not a refusal: entries are held and replayed on `notify:ready`.
@@ -400,7 +403,9 @@ AddEventHandler("onClientResourceStart", function(name)
 
   CreateThread(function()
     while true do
-      tick()
+      -- pcall: a raise from a host call here would end expiry and the sweep for the session
+      local ok, err = pcall(tick)
+      if not ok then Open77.log.error("tick raised: " .. tostring(err)) end
       Wait(TICK_MS)
     end
   end)
