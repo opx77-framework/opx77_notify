@@ -290,19 +290,29 @@ local function sweepOwners(atMs)
   end
 end
 
---- Deadlines, then owners.
+--- Deadlines, then owners. A pass before the earliest deadline walks nothing.
 local function tick()
   local atMs = nowMs()
 
-  local due, dueCount = nil, 0
-  for handle, entry in pairs(State.entries) do
-    if entry.expiresAtMs ~= nil and atMs >= entry.expiresAtMs then
-      dueCount = dueCount + 1
-      due = due or {}
-      due[dueCount] = handle
+  if State.nextExpiryMs ~= nil and atMs >= State.nextExpiryMs then
+    -- built lazily, and built at all because removing an entry mutates the table this walks
+    local due, dueCount, earliest = nil, 0, nil
+    for handle, entry in pairs(State.entries) do
+      local expiresAtMs = entry.expiresAtMs
+      if expiresAtMs ~= nil then
+        if atMs >= expiresAtMs then
+          dueCount = dueCount + 1
+          due = due or {}
+          due[dueCount] = handle
+        elseif earliest == nil or expiresAtMs < earliest then
+          earliest = expiresAtMs
+        end
+      end
     end
+    -- before the removals: a removal cannot add a deadline, but it can raise an event
+    State.nextExpiryMs = earliest
+    for index = 1, dueCount do removeInternal(due[index], "expired") end
   end
-  for index = 1, dueCount do removeInternal(due[index], "expired") end
 
   sweepOwners(atMs)
 end
@@ -318,7 +328,7 @@ RegisterNetEvent("open77:notifications:show", function(envelope)
   if type(envelope) ~= "table" then return end
   local owner = State.serverOwner(envelope.owner)
   if owner == nil then return end
-  if not State.validName(envelope.id, 96) then return end
+  if not State.validName(envelope.id, State.MAX_ID) then return end
   if type(envelope.definition) ~= "table" then return end
 
   local definition = State.copy(envelope.definition)
@@ -333,7 +343,7 @@ RegisterNetEvent("open77:notifications:update", function(envelope)
   if type(envelope) ~= "table" then return end
   local owner = State.serverOwner(envelope.owner)
   if owner == nil or type(envelope.patch) ~= "table" then return end
-  if type(envelope.id) ~= "string" then return end
+  if not State.validName(envelope.id, State.MAX_ID) then return end
   local handle = State.identities[State.key(owner, envelope.id)]
   if handle == nil then return end
   Runtime.update(owner, handle, envelope.patch)
@@ -342,7 +352,7 @@ end)
 RegisterNetEvent("open77:notifications:dismiss", function(envelope)
   if type(envelope) ~= "table" then return end
   local owner = State.serverOwner(envelope.owner)
-  if owner == nil or type(envelope.id) ~= "string" then return end
+  if owner == nil or not State.validName(envelope.id, State.MAX_ID) then return end
   local handle = State.identities[State.key(owner, envelope.id)]
   if handle == nil then return end
   removeInternal(handle, "server_dismissed")
@@ -438,6 +448,7 @@ AddEventHandler("onClientResourceStop", function(name)
     -- Quiet: an owner's handler could call straight back into an export, and this VM is
     -- halfway through stopping.
     for handle in pairs(State.entries) do State.entries[handle] = nil end
+    State.nextExpiryMs = nil
     State.identities = {}
     State.generations = {}
     State.enabled = {}

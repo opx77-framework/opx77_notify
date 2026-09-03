@@ -14,10 +14,11 @@ OpxNotify.state = State
 local MAX_TITLE = 96
 local MAX_MESSAGE = 384
 local MAX_ICON = 16
-local MAX_ID = 96
 
---- The bound on a resource name, which is what an owner is.
-local MAX_OWNER = 64
+--- Bounds on the two names: a notification id, and a resource name, which is what an owner
+--- is. Read by the export surface and by the inbound handlers as well as here.
+State.MAX_ID = 96
+State.MAX_OWNER = 64
 
 --- `0` is persistent; a timed toast is 750..120000 ms.
 local MIN_TIMED_MS = 750
@@ -69,6 +70,10 @@ State.enabled = {}
 
 --- Handles are client-local, monotonic and never reused within a session.
 State.nextHandle = 1
+
+--- The earliest deadline held, `nil` when nothing timed is. Only `State.put` lowers it and
+--- only the tick recomputes it: a removal leaves it early, which costs one walk and nothing.
+State.nextExpiryMs = nil
 
 --- A finite number: a number, not NaN, neither infinity.
 ---@param value any
@@ -182,7 +187,7 @@ function State.normalize(owner, definition, handle, atMs)
 
   local id = definition.id
   if id == nil then id = State.autoId(owner, handle) end
-  if not State.validName(id, MAX_ID) then return nil, "invalid_notification_id" end
+  if not State.validName(id, State.MAX_ID) then return nil, "invalid_notification_id" end
 
   local title = definition.title
   if title == nil then title = "" end
@@ -346,6 +351,10 @@ function State.put(entry)
   end
   State.entries[entry.handle] = entry
   State.identities[State.key(entry.owner, entry.id)] = entry.handle
+  if entry.expiresAtMs ~= nil
+    and (State.nextExpiryMs == nil or entry.expiresAtMs < State.nextExpiryMs) then
+    State.nextExpiryMs = entry.expiresAtMs
+  end
   return entry
 end
 
@@ -393,6 +402,6 @@ end
 ---@param value any the resource name carried in the envelope
 ---@return string|nil
 function State.serverOwner(value)
-  if not State.validName(value, MAX_OWNER) then return nil end
+  if not State.validName(value, State.MAX_OWNER) then return nil end
   return "@server:" .. value
 end

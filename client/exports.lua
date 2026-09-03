@@ -12,7 +12,7 @@ local response = Runtime.response
 local function caller()
   local owner = GetInvokingResource()
   local generation = GetInvokingResourceGeneration()
-  if not State.validName(owner, 64) or type(generation) ~= "number" then
+  if not State.validName(owner, State.MAX_OWNER) or type(generation) ~= "number" then
     return nil, "export_call_required"
   end
   -- A generation that has moved means the code that raised those toasts no longer exists.
